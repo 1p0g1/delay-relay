@@ -1,17 +1,57 @@
+import base64
 import streamlit as st
 import pandas as pd
+import snowflake.connector
 from datetime import timedelta
 
 TTL = timedelta(minutes=30)
 
 
+@st.cache_resource
+def _init_connection():
+    secrets = st.secrets["connections"]["snowflake"]
+    params = dict(secrets)
+    params.pop("authenticator", None)
+    if "private_key" in params and isinstance(params["private_key"], str):
+        params["private_key"] = base64.b64decode(params["private_key"])
+    elif "private_key_file" in params:
+        from cryptography.hazmat.primitives import serialization
+        from cryptography.hazmat.backends import default_backend
+        pwd = params.pop("private_key_file_pwd", None)
+        with open(params.pop("private_key_file"), "rb") as f:
+            p_key = serialization.load_pem_private_key(
+                f.read(),
+                password=pwd.encode() if pwd else None,
+                backend=default_backend(),
+            )
+        params["private_key"] = p_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+    return snowflake.connector.connect(**params)
+
+
 def get_conn():
-    return st.connection("snowflake")
+    return _init_connection()
+
+
+def _query(sql, params=None) -> pd.DataFrame:
+    cur = get_conn().cursor()
+    try:
+        if params:
+            cur.execute(sql, params)
+        else:
+            cur.execute(sql)
+        cols = [desc[0] for desc in cur.description]
+        return pd.DataFrame(cur.fetchall(), columns=cols)
+    finally:
+        cur.close()
 
 
 @st.cache_data(ttl=TTL)
 def load_ppm_summary() -> pd.DataFrame:
-    return get_conn().query("""
+    return _query("""
         SELECT OPERATOR, CATEGORY, LATEST_PERIOD, LATEST_PPM, PREVIOUS_PPM,
                PPM_CHANGE, RAG_STATUS, REFRESHED_AT
         FROM DFT_PPM.ANALYTICS.PPM_DASHBOARD_SUMMARY
@@ -21,7 +61,7 @@ def load_ppm_summary() -> pd.DataFrame:
 
 @st.cache_data(ttl=TTL)
 def load_ppm_trend() -> pd.DataFrame:
-    return get_conn().query("""
+    return _query("""
         SELECT TIME_PERIOD, FINANCIAL_YEAR, PERIOD_NUMBER, OPERATOR, CATEGORY, PPM_PERCENTAGE
         FROM DFT_PPM.PROCESSED.PPM_BY_OPERATOR
         ORDER BY TIME_PERIOD
@@ -30,7 +70,7 @@ def load_ppm_trend() -> pd.DataFrame:
 
 @st.cache_data(ttl=TTL)
 def load_delay_causes() -> pd.DataFrame:
-    return get_conn().query("""
+    return _query("""
         SELECT TIME_PERIOD, FINANCIAL_YEAR, PERIOD_NUMBER, TRAIN_OPERATING_COMPANY,
                TOTAL_NR_CAUSED_DELAY_MINS, TOTAL_TOC_SELF_DELAY_MINS, TOTAL_TOC_OTHER_DELAY_MINS,
                WEATHER_DELAY_MINS, TRACK_DELAY_MINS, TOTAL_FLEET_DELAY_MINS, TOTAL_TRAINCREW_DELAY_MINS
@@ -41,7 +81,7 @@ def load_delay_causes() -> pd.DataFrame:
 
 @st.cache_data(ttl=TTL)
 def load_cancellations() -> pd.DataFrame:
-    return get_conn().query("""
+    return _query("""
         SELECT TIME_PERIOD, FINANCIAL_YEAR, PERIOD_NUMBER, OPERATOR,
                TRAINS_PLANNED, TRAINS_PART_CANCELLED, TRAINS_FULL_CANCELLED,
                CANCELLATION_NUMBER, CANCELLATIONS_PERCENTAGE, MAA_CANCELLATIONS_PERCENTAGE
@@ -52,7 +92,7 @@ def load_cancellations() -> pd.DataFrame:
 
 @st.cache_data(ttl=TTL)
 def load_international() -> pd.DataFrame:
-    return get_conn().query("""
+    return _query("""
         SELECT RAILWAY, COUNTRY, PPM_PERCENT, METRIC, THRESHOLD_MINUTES,
                PERFORMANCE_CATEGORY, NOTES, GB_BASELINE, GAP_TO_GB_PPM, LEAGUE_POSITION
         FROM DFT_PPM.ANALYTICS.INTERNATIONAL_PPM_LEAGUE
@@ -62,14 +102,12 @@ def load_international() -> pd.DataFrame:
 
 @st.cache_data(ttl=TTL)
 def load_cost_tracker() -> pd.DataFrame:
-    return get_conn().query("""
-        SELECT * FROM DFT_PPM.ANALYTICS.COST_TRACKER
-    """)
+    return _query("SELECT * FROM DFT_PPM.ANALYTICS.COST_TRACKER")
 
 
 @st.cache_data(ttl=TTL)
 def load_object_inventory() -> pd.DataFrame:
-    return get_conn().query("""
+    return _query("""
         SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, ROW_COUNT
         FROM DFT_PPM.INFORMATION_SCHEMA.TABLES
         WHERE TABLE_SCHEMA IN ('RAW', 'PROCESSED', 'ANALYTICS', 'FEATURES')
@@ -79,7 +117,7 @@ def load_object_inventory() -> pd.DataFrame:
 
 @st.cache_data(ttl=TTL)
 def load_stations() -> pd.DataFrame:
-    return get_conn().query("""
+    return _query("""
         SELECT STATION_NAME, LATITUDE, LONGITUDE, REGION, COUNTY_UNITARY, COUNTRY, POSTCODE_DISTRICT
         FROM DFT_PPM.RAW.RAILWAY_STATIONS
         WHERE LATITUDE IS NOT NULL AND LONGITUDE IS NOT NULL
@@ -88,7 +126,7 @@ def load_stations() -> pd.DataFrame:
 
 @st.cache_data(ttl=timedelta(minutes=5))
 def load_dq_results() -> pd.DataFrame:
-    return get_conn().query("""
+    return _query("""
         SELECT * FROM DFT_PPM.ANALYTICS.DATA_QUALITY_RESULTS
         ORDER BY MEASUREMENT_TIME DESC
     """)
@@ -106,11 +144,10 @@ def load_dq_inventory() -> pd.DataFrame:
         'DFT_PPM.ANALYTICS.PPM_DASHBOARD_SUMMARY',
     ]
     frames = []
-    conn = get_conn()
     for tbl in tables:
         parts = tbl.split(".")
         try:
-            df = conn.query(f"""
+            df = _query(f"""
                 SELECT
                   '{parts[1]}' AS TBL_SCHEMA,
                   '{parts[2]}' AS TBL_NAME,

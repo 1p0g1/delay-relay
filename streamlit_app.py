@@ -6,11 +6,6 @@ st.set_page_config(
     layout="wide",
 )
 
-conn = st.connection("snowflake")
-
-if "conn" not in st.session_state:
-    st.session_state.conn = conn
-
 page = st.navigation(
     {
         "": [

@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from app_pages.styling import inject_gov_uk_css
-from app_pages.queries import get_conn
+from app_pages.queries import get_conn, _query
 
 inject_gov_uk_css()
 
@@ -58,15 +58,14 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
     user_q = st.session_state.messages[-1]["content"]
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
-            conn = get_conn()
             conversation = "\n".join(
                 [f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages[-6:]]
             )
             full_prompt = f"{SYSTEM_PROMPT}\n\nConversation:\n{conversation}\n\nASSISTANT:"
 
             try:
-                result = conn.query(
-                    "SELECT SNOWFLAKE.CORTEX.COMPLETE(:1, :2) AS RESPONSE",
+                result = _query(
+                    "SELECT SNOWFLAKE.CORTEX.COMPLETE(%s, %s) AS RESPONSE",
                     params=["mistral-large2", full_prompt],
                 )
                 response = result["RESPONSE"].values[0] if len(result) > 0 else "No response generated."
@@ -85,7 +84,7 @@ if st.session_state.messages and st.session_state.messages[-1]["role"] == "user"
             for sql in sql_blocks:
                 with st.expander("Run this query", expanded=False):
                     try:
-                        df = conn.query(sql)
+                        df = _query(sql)
                         st.dataframe(df, hide_index=True)
                     except Exception as e:
                         st.error(f"Query error: {e}")
