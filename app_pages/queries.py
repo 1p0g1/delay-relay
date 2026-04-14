@@ -9,11 +9,14 @@ TTL = timedelta(minutes=30)
 
 @st.cache_resource
 def _init_connection():
-    secrets = st.secrets["connections"]["snowflake"]
+    try:
+        secrets = st.secrets["connections"]["snowflake"]
+    except (KeyError, FileNotFoundError):
+        return st.connection("snowflake").raw_connection
     params = {k: str(v) for k, v in dict(secrets).items()}
     params.pop("authenticator", None)
-    params.pop("private_key_file_pwd", None)
     if "private_key" in params:
+        params.pop("private_key_file_pwd", None)
         params["private_key"] = base64.b64decode(params["private_key"])
     elif "private_key_file" in params:
         from cryptography.hazmat.primitives import serialization
