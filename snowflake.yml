@@ -1,0 +1,23 @@
+definition_version: 2
+entities:
+  dft_ppm_dashboard:
+    type: streamlit
+    identifier:
+      name: DFT_PPM_DASHBOARD
+      database: DFT_PPM
+      schema: ANALYTICS
+    query_warehouse: DFT_PPM_WH
+    main_file: streamlit_app.py
+    artifacts:
+      - streamlit_app.py
+      - app_pages/overview.py
+      - app_pages/operators.py
+      - app_pages/delay_causes.py
+      - app_pages/cancellations.py
+      - app_pages/international.py
+      - app_pages/about.py
+      - app_pages/styling.py
+      - app_pages/queries.py
+      - app_pages/data_quality.py
+      - app_pages/station_map.py
+      - app_pages/ask_data.py
