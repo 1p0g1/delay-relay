@@ -33,15 +33,26 @@ with st.container(horizontal=True):
 
 st.divider()
 
+COUNTRY_FLAGS = {
+    "Taiwan": "\U0001F1F9\U0001F1FC", "Japan": "\U0001F1EF\U0001F1F5",
+    "South Korea": "\U0001F1F0\U0001F1F7", "Switzerland": "\U0001F1E8\U0001F1ED",
+    "Spain": "\U0001F1EA\U0001F1F8", "France": "\U0001F1EB\U0001F1F7",
+    "Netherlands": "\U0001F1F3\U0001F1F1", "Italy": "\U0001F1EE\U0001F1F9",
+    "Finland": "\U0001F1EB\U0001F1EE", "Austria": "\U0001F1E6\U0001F1F9",
+    "Denmark": "\U0001F1E9\U0001F1F0", "Great Britain": "\U0001F1EC\U0001F1E7",
+    "Sweden": "\U0001F1F8\U0001F1EA", "Germany": "\U0001F1E9\U0001F1EA",
+}
+
 intl["IS_GB"] = intl["COUNTRY"] == "Great Britain"
 intl["BAR_COLOR"] = intl.apply(
     lambda r: "#d4351c" if r["COUNTRY"] == "Great Britain"
     else ("#00703c" if r["PPM_PERCENT"] >= 90 else ("#f47738" if r["PPM_PERCENT"] >= 80 else "#b1b4b6")),
     axis=1,
 )
+intl["FLAG"] = intl["COUNTRY"].map(COUNTRY_FLAGS).fillna("")
 intl["LABEL"] = intl.apply(
-    lambda r: f"{r['COUNTRY']}  ({r['RAILWAY']})" if r["COUNTRY"] != "Great Britain"
-    else f"{r['COUNTRY']}  (National Rail)",
+    lambda r: f"{r['FLAG']}  {r['COUNTRY']}" if r["COUNTRY"] != "Great Britain"
+    else f"{r['FLAG']}  Great Britain",
     axis=1,
 )
 
@@ -55,12 +66,12 @@ with st.container(border=True):
         alt.Chart(intl)
         .mark_bar(cornerRadiusEnd=4)
         .encode(
-            x=alt.X("PPM_PERCENT:Q", title="On-time performance %", scale=alt.Scale(domain=[0, 105])),
+            x=alt.X("PPM_PERCENT:Q", title="On-time performance %", scale=alt.Scale(domain=[0, 100])),
             y=alt.Y("LABEL:N", title="", sort=sort_order),
             color=alt.Color("BAR_COLOR:N", scale=None),
             tooltip=[
                 alt.Tooltip("COUNTRY:N", title="Country"),
-                alt.Tooltip("RAILWAY:N", title="Railway"),
+                alt.Tooltip("RAILWAY:N", title="Railway operator"),
                 alt.Tooltip("PPM_PERCENT:Q", title="PPM %", format=".1f"),
                 alt.Tooltip("THRESHOLD_MINUTES:Q", title="Threshold (mins)"),
                 alt.Tooltip("METRIC:N", title="Metric"),
@@ -127,16 +138,6 @@ with col_gap:
 
         st.altair_chart(gap_bars + zero_rule)
 
-COUNTRY_FLAGS = {
-    "Taiwan": "\U0001F1F9\U0001F1FC", "Japan": "\U0001F1EF\U0001F1F5",
-    "South Korea": "\U0001F1F0\U0001F1F7", "Switzerland": "\U0001F1E8\U0001F1ED",
-    "Spain": "\U0001F1EA\U0001F1F8", "France": "\U0001F1EB\U0001F1F7",
-    "Netherlands": "\U0001F1F3\U0001F1F1", "Italy": "\U0001F1EE\U0001F1F9",
-    "Finland": "\U0001F1EB\U0001F1EE", "Austria": "\U0001F1E6\U0001F1F9",
-    "Denmark": "\U0001F1E9\U0001F1F0", "Great Britain": "\U0001F1EC\U0001F1E7",
-    "Sweden": "\U0001F1F8\U0001F1EA", "Germany": "\U0001F1E9\U0001F1EA",
-}
-
 with col_threshold:
     with st.container(border=True):
         st.subheader("Threshold comparison")
@@ -151,7 +152,7 @@ with col_threshold:
             .mark_circle(opacity=0.8)
             .encode(
                 x=alt.X("THRESHOLD_MINUTES:Q", title="On-time threshold (minutes)", scale=alt.Scale(domain=[0, 12])),
-                y=alt.Y("PPM_PERCENT:Q", title="PPM %", scale=alt.Scale(domain=[55, 105])),
+                y=alt.Y("PPM_PERCENT:Q", title="PPM %", scale=alt.Scale(domain=[55, 100])),
                 size=alt.Size("PPM_PERCENT:Q", legend=None, scale=alt.Scale(range=[200, 1200])),
                 color=alt.Color("BAR_COLOR:N", scale=None),
                 tooltip=[
@@ -179,7 +180,7 @@ with col_threshold:
 with st.container(border=True):
     st.subheader("Full benchmark data")
     st.dataframe(
-        intl[["LEAGUE_POSITION", "COUNTRY", "RAILWAY", "PPM_PERCENT", "THRESHOLD_MINUTES", "PERFORMANCE_CATEGORY", "GAP_TO_GB_PPM", "NOTES"]],
+        intl[["LEAGUE_POSITION", "COUNTRY", "RAILWAY", "PPM_PERCENT", "THRESHOLD_MINUTES", "PERFORMANCE_CATEGORY", "GAP_TO_GB_PPM", "OPERATOR_COVERAGE", "DATA_SOURCE", "NOTES"]],
         column_config={
             "LEAGUE_POSITION": st.column_config.NumberColumn("Rank", format="%d"),
             "PPM_PERCENT": st.column_config.NumberColumn("PPM %", format="%.1f"),
@@ -188,6 +189,8 @@ with st.container(border=True):
             "COUNTRY": "Country",
             "RAILWAY": "Railway",
             "PERFORMANCE_CATEGORY": "Category",
+            "OPERATOR_COVERAGE": "Coverage",
+            "DATA_SOURCE": "Source",
             "NOTES": "Notes",
         },
         hide_index=True,

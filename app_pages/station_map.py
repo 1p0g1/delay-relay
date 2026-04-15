@@ -1,9 +1,32 @@
+import json
+import pathlib
 import streamlit as st
 import altair as alt
 import pandas as pd
 import pydeck as pdk
+import requests
 from app_pages.styling import inject_gov_uk_css
 from app_pages.queries import load_stations, load_ppm_summary
+
+UK_COASTLINE_URL = "https://raw.githubusercontent.com/yorkirich/UK-Coastline/main/uk%20coastline%20simplified.geojson"
+RAIL_LINES_PATH = pathlib.Path(__file__).resolve().parent.parent / "data" / "gb_rail_lines.geojson"
+
+@st.cache_data(ttl=86400)
+def _load_coastline():
+    try:
+        resp = requests.get(UK_COASTLINE_URL, timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return None
+
+@st.cache_data(ttl=86400)
+def _load_rail_lines():
+    try:
+        with open(RAIL_LINES_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 inject_gov_uk_css()
 
@@ -95,8 +118,31 @@ with st.container(border=True):
         pitch=30 if map_style == "Hexbin" else 0,
     )
 
+    coastline = _load_coastline()
+    rail_lines = _load_rail_lines()
+    layers = []
+    if coastline:
+        layers.append(pdk.Layer(
+            "GeoJsonLayer",
+            data=coastline,
+            stroked=True,
+            filled=False,
+            get_line_color=[180, 180, 180, 120],
+            line_width_min_pixels=1,
+        ))
+    if rail_lines:
+        layers.append(pdk.Layer(
+            "GeoJsonLayer",
+            data=rail_lines,
+            stroked=True,
+            filled=False,
+            get_line_color=[100, 140, 200, 100],
+            line_width_min_pixels=1,
+        ))
+    layers.append(layer)
+
     st.pydeck_chart(pdk.Deck(
-        layers=[layer],
+        layers=layers,
         initial_view_state=view,
         tooltip={"text": "{STATION_NAME}\n{REGION}, {COUNTY_UNITARY}\n{POSTCODE_DISTRICT}"},
         map_style="mapbox://styles/mapbox/dark-v11",

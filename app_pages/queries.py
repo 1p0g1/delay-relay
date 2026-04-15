@@ -33,13 +33,7 @@ def _init_connection():
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption(),
         )
-    try:
-        return snowflake.connector.connect(**params)
-    except Exception as e:
-        debug = {k: (v[:20] + "..." if isinstance(v, (str, bytes)) and len(v) > 20 else type(v).__name__) for k, v in params.items()}
-        st.error(f"Connection failed: {type(e).__name__}: {e}")
-        st.code(f"params keys/types: {debug}", language="text")
-        raise
+    return snowflake.connector.connect(**params)
 
 
 def get_conn():
@@ -104,7 +98,8 @@ def load_cancellations() -> pd.DataFrame:
 def load_international() -> pd.DataFrame:
     return _query("""
         SELECT RAILWAY, COUNTRY, PPM_PERCENT, METRIC, THRESHOLD_MINUTES,
-               PERFORMANCE_CATEGORY, NOTES, GB_BASELINE, GAP_TO_GB_PPM, LEAGUE_POSITION
+               PERFORMANCE_CATEGORY, NOTES, OPERATOR_COVERAGE, DATA_SOURCE,
+               GB_BASELINE, GAP_TO_GB_PPM, LEAGUE_POSITION
         FROM DFT_PPM.ANALYTICS.INTERNATIONAL_PPM_LEAGUE
         ORDER BY PPM_PERCENT DESC
     """)
