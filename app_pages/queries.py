@@ -33,7 +33,13 @@ def _init_connection():
             format=serialization.PrivateFormat.PKCS8,
             encryption_algorithm=serialization.NoEncryption(),
         )
-    return snowflake.connector.connect(**params)
+    try:
+        return snowflake.connector.connect(**params)
+    except Exception as e:
+        debug = {k: (v[:20] + "..." if isinstance(v, (str, bytes)) and len(v) > 20 else type(v).__name__) for k, v in params.items()}
+        st.error(f"Connection failed: {type(e).__name__}: {e}")
+        st.code(f"params keys/types: {debug}", language="text")
+        raise
 
 
 def get_conn():
